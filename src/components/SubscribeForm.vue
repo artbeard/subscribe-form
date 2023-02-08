@@ -21,22 +21,34 @@
 					</header>
 					<p>Subscrive to recieve 10% off promocode plus exclusive offers and deals</p>
 					<div class="pop-up__notify">
-						<!-- <span class="success">You have successfully subscribed to the newsletter</span> -->
+						<span class="success" v-show="showSubscribeSuccess">
+							You have successfully subscribed to the newsletter
+						</span>
 						<!-- <span class="error">You have already subscribed to the newsletter</span> -->
 					</div>
-					<form @submit.prevent="subscribe">
-						<div class="form-row _form-row-error">
+					<form @submit.prevent="subscribe" v-show="!showSubscribeSuccess">
+						<div class="form-row"
+							:class="{ 'form-row-error': submitted && (v$.email.$errors.length > 0) }">
 							<label for="">Email-adress</label>
-							<input type="email" v-model.trim="email">
-							<div class="form-row__error-notice">Text Error</div>
+							<input type="email" v-model.trim="email" v-focus>
+							<div class="form-row__error-notice">
+								<template v-for="error of v$.email.$errors" :key="error.$uid">
+									{{ error.$message }}
+								</template>
+							</div>
 						</div>
 						<div class="form-row">
-							<button type="button">Subscribe!</button>
+							<button>Subscribe!</button>
 						</div>
-						<div class="form-row form-checkbox _form-row-error">
+						<div class="form-row form-checkbox"
+							:class="{ 'form-row-error': submitted && (v$.agreement.$errors.length > 0) }">
 							<input type="checkbox" id="confirm_pp" v-model="agreement">
 							<label for="confirm_pp">I'm agree with privacy policy</label>
-							<div class="form-row__error-notice">Text Error</div>
+							<div class="form-row__error-notice">
+								<template v-for="error of v$.agreement.$errors" :key="error.$uid">
+									{{ error.$message }}
+								</template>
+							</div>
 						</div>
 					</form>
 				</div>
@@ -45,9 +57,9 @@
 	</teleport>
 </template>
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineComponent, toRaw } from 'vue';
 import { useVuelidate } from '@vuelidate/core'
-import { required, email as emailValidator } from '@vuelidate/validators'
+import { helpers, required, sameAs, email as emailValidator } from '@vuelidate/validators'
 
 export default defineComponent({
 	name: 'SubscribeForm',
@@ -55,13 +67,57 @@ export default defineComponent({
 		emailList: [] as string[],
 		email: '' as string,
 		agreement: false as boolean,
+		submitted: false as boolean,
+		showSubscribeSuccess: false as boolean,
 	}),
+	validations () {
+		return {
+			email: {
+				required: helpers.withMessage(
+						() => `This field is required.`,
+						required
+					),
+				email: helpers.withMessage(
+						() => `Please enter a valid email address.`,
+						emailValidator
+					),
+				isSubscribed: helpers.withMessage(
+					() => `You have already subscribed to the newsletter.`,
+					(value: string) => !this.emailList.includes(value)
+				),
+			},
+			agreement: { 
+				sameAs: helpers.withMessage(
+						() => `You must agree to our privacy policy.`,
+						sameAs( true ) 
+					),
+			},
+		}
+	},
 	emits: ['toggleVisibility'],
 	methods:{
-		subscribe(){
-
+		//отправка формы
+		async subscribe(){
+			this.submitted = true;
+			let isFormCorrect = await this.v$.$validate();
+			if (isFormCorrect)
+			{
+				this.emailList.push(this.email);
+				localStorage.setItem(
+					'emailList',
+					JSON.stringify(toRaw(this.emailList))
+				);
+				this.submitted = false;
+				this.email = '';
+				this.showSubscribeSuccess = true;
+				//сокрытие подтверждения
+				// let h = setTimeout(()=>{
+				// 	this.showSubscribeSuccess = false;
+				// 	clearTimeout(h);
+				// }, 5000);
+			}
 		},
-
+		//Закрытие окна
 		close(){
 			this.$emit('toggleVisibility');
 		},
@@ -83,9 +139,8 @@ export default defineComponent({
 			}
 		}
 	},
+	setup() {
+		return { v$: useVuelidate() }
+	}
 })
 </script>
-
-<style lang="">
-	
-</style>
